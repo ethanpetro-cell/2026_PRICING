@@ -44,7 +44,7 @@ const EMPTY_JOB = {
   totalCust:0, ogCost:0, notes:"",
 };
 
-export default function OwnerBackend({ onRatesChange, onVendorsChange }) {
+export default function OwnerBackend({ onRatesChange, onVendorsChange, stateConfig, onStatesChange, userPerms, onUserPermsChange }) {
   const [tab, setTab]       = useState("rates");
   const [rates, setRates]   = useState(DEFAULT_RATES);
   const [vendors, setVendors] = useState(DEFAULT_VENDORS);
@@ -153,6 +153,9 @@ export default function OwnerBackend({ onRatesChange, onVendorsChange }) {
       }}>
         {[
           ["rates",  "Rates & Vendors"],
+          ["states", "States & Tax"],
+          ["users",  "User Permissions"],
+          ["database","Database Setup"],
           ["jobs",   "Annual Job Log"],
           ["report", "Annual Report"],
         ].map(([t,lbl]) => (
@@ -593,6 +596,319 @@ export default function OwnerBackend({ onRatesChange, onVendorsChange }) {
           </div>
         </div>
       )}
+
+      {/* ── STATES & TAX ─────────────────────────────────── */}
+      {tab==="states" && (
+        <div>
+          <OTtl>States &amp; Tax Rates</OTtl>
+          <div style={{ fontSize:11, color:C.stoneDk, marginBottom:20, letterSpacing:"0.04em", lineHeight:1.6 }}>
+            Add or edit states below. Changes take effect immediately in the quote builder state selector.
+            Each state controls its own sales tax rate, default installation rate, and incentive settings.
+          </div>
+
+          {/* Column headers */}
+          <div style={{
+            display:"grid", gridTemplateColumns:"0.7fr 2fr 1fr 1fr 1fr 0.8fr 80px",
+            gap:12, paddingBottom:8, borderBottom:`1px solid ${C.stone}`, marginBottom:4,
+          }}>
+            {["Code","Label","Sales Tax %","Install %","Incentive %","Show Incentive",""].map((h,i) => (
+              <div key={i} style={{ fontSize:8, letterSpacing:"0.16em", color:C.stoneDk,
+                textTransform:"uppercase", textAlign:i>=2&&i<=4?"right":"left" }}>{h}</div>
+            ))}
+          </div>
+
+          {/* Existing states */}
+          {Object.entries(stateConfig||{}).map(([code, info]) => (
+            <StateRow key={code} code={code} info={info}
+              onUpdate={(field, val) => {
+                const updated = {
+                  ...stateConfig,
+                  [code]: { ...info, [field]: val }
+                };
+                onStatesChange?.(updated);
+              }}
+              onDelete={() => {
+                const updated = { ...stateConfig };
+                delete updated[code];
+                onStatesChange?.(updated);
+              }}
+            />
+          ))}
+
+          {/* Add new state row */}
+          <AddStateRow
+            existingCodes={Object.keys(stateConfig||{})}
+            onAdd={(code, info) => {
+              onStatesChange?.({ ...stateConfig, [code]: info });
+            }}
+          />
+
+          <div style={{
+            marginTop:20, padding:"14px 18px",
+            background:"#EEF2EA", border:`1px solid ${C.moss}22`,
+            fontSize:10, color:C.stoneDk, lineHeight:1.6, letterSpacing:"0.04em",
+          }}>
+            <strong style={{color:C.moss}}>Tip:</strong> The install % sets the default installation auto-calculation for that state.
+            Sales tax is applied to net cabinet cost. Incentive % only matters if "Show Incentive" is on.
+            Mark users can only be restricted to specific state codes in the USERS config.
+          </div>
+        </div>
+      )}
+
+      {/* ── USER PERMISSIONS ─────────────────────────────── */}
+      {tab==="users" && (
+        <div>
+          <OTtl>User State Permissions</OTtl>
+          <div style={{ fontSize:11, color:C.stoneDk, marginBottom:24, letterSpacing:"0.04em", lineHeight:1.7 }}>
+            Control which states each user can quote in. Owners always have access to all states.
+            Set a user to <strong style={{color:C.bark}}>All States</strong> to remove restrictions,
+            or select specific states to limit them.
+          </div>
+
+          {/* Column headers */}
+          <div style={{
+            display:"grid", gridTemplateColumns:"1fr 1fr 2fr",
+            gap:16, paddingBottom:8,
+            borderBottom:`1px solid ${C.stone}`, marginBottom:4,
+          }}>
+            {["User","Role","Allowed States"].map((h,i) => (
+              <div key={i} style={{ fontSize:8, letterSpacing:"0.16em", color:C.stoneDk,
+                textTransform:"uppercase" }}>{h}</div>
+            ))}
+          </div>
+
+          {/* Staff users */}
+          {[
+            { key:"hunter", displayName:"Hunter", role:"Staff" },
+            { key:"james",  displayName:"James",  role:"Staff" },
+            { key:"megan",  displayName:"Megan",  role:"Staff" },
+            { key:"mark",   displayName:"Mark",   role:"Staff" },
+          ].map(u => {
+            const perm = userPerms?.[u.key];
+            const restricted = perm?.allowedStates !== null && perm?.allowedStates !== undefined;
+            const allowed = perm?.allowedStates || [];
+            const allStateCodes = Object.keys(stateConfig||{});
+
+            const toggleAll = () => {
+              onUserPermsChange?.({
+                ...(userPerms||{}),
+                [u.key]: { allowedStates: restricted ? null : [] }
+              });
+            };
+            const toggleState = (code) => {
+              const current = allowed;
+              const next = current.includes(code)
+                ? current.filter(c=>c!==code)
+                : [...current, code];
+              onUserPermsChange?.({
+                ...(userPerms||{}),
+                [u.key]: { allowedStates: next }
+              });
+            };
+
+            return (
+              <div key={u.key} style={{
+                display:"grid", gridTemplateColumns:"1fr 1fr 2fr",
+                gap:16, padding:"16px 0",
+                borderBottom:`1px solid ${C.parchmentDk}`,
+                alignItems:"start",
+              }}>
+                {/* Name */}
+                <div style={{
+                  fontFamily:"'Cormorant Garamond',serif",
+                  fontSize:18, fontWeight:300, color:C.charcoal,
+                }}>{u.displayName}</div>
+
+                {/* Role badge */}
+                <div style={{
+                  fontSize:9, fontWeight:500, letterSpacing:"0.1em",
+                  textTransform:"uppercase", color:C.clay,
+                  background:"#F2EAD8", padding:"4px 10px",
+                  alignSelf:"center", display:"inline-block",
+                }}>{u.role}</div>
+
+                {/* State toggles */}
+                <div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                    {/* All States toggle */}
+                    <button onClick={toggleAll} style={{
+                      fontSize:8, letterSpacing:"0.12em", textTransform:"uppercase",
+                      fontFamily:"'Jost',sans-serif", cursor:"pointer",
+                      padding:"5px 12px",
+                      background: !restricted ? C.charcoal : "transparent",
+                      color: !restricted ? C.parchment : C.stoneDk,
+                      border: `1px solid ${!restricted ? C.charcoal : C.stone}`,
+                      transition:"all 0.15s",
+                    }}>All States</button>
+
+                    {/* Per-state toggles */}
+                    {allStateCodes.map(code => {
+                      const active = restricted && allowed.includes(code);
+                      return (
+                        <button key={code} onClick={()=>{ if(restricted) toggleState(code); }}
+                          disabled={!restricted}
+                          style={{
+                            fontSize:9, letterSpacing:"0.1em",
+                            fontFamily:"'Jost',sans-serif", cursor:restricted?"pointer":"default",
+                            padding:"5px 12px", fontWeight:500,
+                            background: active ? "#3D4A35" : restricted ? "transparent" : C.parchmentDk,
+                            color: active ? C.parchment : restricted ? C.stoneDk : C.stone,
+                            border: `1px solid ${active ? "#3D4A35" : restricted ? C.stone : C.parchmentDk}`,
+                            transition:"all 0.15s",
+                            opacity: restricted ? 1 : 0.4,
+                          }}>{code}</button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Summary */}
+                  <div style={{fontSize:9,color:C.stoneDk,letterSpacing:"0.04em"}}>
+                    {!restricted
+                      ? "Can quote in any state"
+                      : allowed.length===0
+                        ? "⚠ No states assigned — user cannot quote"
+                        : `Restricted to: ${allowed.join(", ")}`
+                    }
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Owners note */}
+          <div style={{
+            marginTop:24, padding:"14px 18px",
+            background:"#EEF2EA", border:`1px solid ${C.moss}22`,
+            fontSize:10, color:C.stoneDk, lineHeight:1.6, letterSpacing:"0.04em",
+          }}>
+            <strong style={{color:C.moss}}>Owners (Ethan, Mitch)</strong> always have access to all states
+            and all features regardless of these settings.
+            Changes take effect the next time a user logs in.
+          </div>
+        </div>
+      )}
+
+      {/* ── DATABASE SETUP ───────────────────────────────── */}
+      {tab==="database" && (
+        <div>
+          <OTtl>Supabase Database Setup</OTtl>
+          <div style={{ fontSize:11, color:C.stoneDk, marginBottom:24, letterSpacing:"0.04em", lineHeight:1.8 }}>
+            Connecting a Supabase database gives all users access to the same data from any device.
+            Projects, change orders, templates, state config, and user permissions all sync automatically.
+            localStorage stays as an offline fallback — nothing is lost if you skip this.
+          </div>
+
+          {/* Step 1 */}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:9, letterSpacing:"0.2em", color:C.bark, textTransform:"uppercase",
+              fontWeight:500, marginBottom:10 }}>Step 1 — Create a free Supabase project</div>
+            <div style={{ fontSize:11, color:C.stoneDk, lineHeight:1.7 }}>
+              Go to <strong style={{color:C.bark}}>supabase.com</strong> → New Project → choose any name (e.g. "og-pricing").
+              Free tier is plenty — this tool stores simple JSON blobs, not large files.
+              Takes about 2 minutes to provision.
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:9, letterSpacing:"0.2em", color:C.bark, textTransform:"uppercase",
+              fontWeight:500, marginBottom:10 }}>Step 2 — Run the schema SQL</div>
+            <div style={{ fontSize:11, color:C.stoneDk, lineHeight:1.7, marginBottom:10 }}>
+              In your Supabase dashboard go to <strong>SQL Editor → New query</strong>, paste the contents
+              of <code style={{background:"#EDE6D8",padding:"1px 6px",fontSize:10}}>supabase_schema.sql</code> (included in your zip),
+              and click Run. This creates 3 tables and sets permissions.
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:9, letterSpacing:"0.2em", color:C.bark, textTransform:"uppercase",
+              fontWeight:500, marginBottom:10 }}>Step 3 — Get your credentials</div>
+            <div style={{ fontSize:11, color:C.stoneDk, lineHeight:1.7 }}>
+              In Supabase go to <strong>Settings → API</strong>. Copy two values:
+            </div>
+            <div style={{
+              background:C.charcoal, color:"#A8D8A0", padding:"16px 20px",
+              fontFamily:"monospace", fontSize:11, lineHeight:1.8,
+              marginTop:10, letterSpacing:"0.02em",
+            }}>
+              Project URL  → starts with https://xxxx.supabase.co<br/>
+              anon public key → long JWT string (safe to expose in frontend)
+            </div>
+          </div>
+
+          {/* Step 4 */}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:9, letterSpacing:"0.2em", color:C.bark, textTransform:"uppercase",
+              fontWeight:500, marginBottom:10 }}>Step 4 — Add to Vercel environment variables</div>
+            <div style={{ fontSize:11, color:C.stoneDk, lineHeight:1.7, marginBottom:10 }}>
+              In your Vercel project go to <strong>Settings → Environment Variables</strong> and add:
+            </div>
+            <div style={{
+              background:C.charcoal, color:"#A8D8A0", padding:"16px 20px",
+              fontFamily:"monospace", fontSize:11, lineHeight:1.8, marginTop:10,
+            }}>
+              VITE_SUPABASE_URL = https://xxxx.supabase.co<br/>
+              VITE_SUPABASE_ANON_KEY = eyJhbGci...your-anon-key
+            </div>
+            <div style={{ fontSize:11, color:C.stoneDk, lineHeight:1.7, marginTop:10 }}>
+              Then redeploy (Vercel → Deployments → Redeploy). The tool will detect the variables
+              and start syncing automatically. <strong>No code changes needed.</strong>
+            </div>
+          </div>
+
+          {/* Step 5 - migrate */}
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:9, letterSpacing:"0.2em", color:C.bark, textTransform:"uppercase",
+              fontWeight:500, marginBottom:10 }}>Step 5 — Migrate existing data</div>
+            <div style={{ fontSize:11, color:C.stoneDk, lineHeight:1.7 }}>
+              After redeployment, the next person to log in will automatically push all their
+              local projects and settings up to Supabase. Have Ethan log in first to seed the database,
+              then everyone else's logins will pull that data down.
+            </div>
+          </div>
+
+          {/* What syncs */}
+          <div style={{
+            padding:"18px 20px", background:"#EEF2EA",
+            border:`1px solid ${C.moss}33`, marginBottom:20,
+          }}>
+            <div style={{ fontSize:9, letterSpacing:"0.18em", color:C.moss,
+              textTransform:"uppercase", marginBottom:10, fontWeight:500 }}>What gets synced</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px 24px" }}>
+              {[
+                ["Projects & quotes","✓  All users see the same pipeline"],
+                ["Change orders",    "✓  COs attach to projects across devices"],
+                ["State config",     "✓  Tax/install rates consistent for everyone"],
+                ["User permissions", "✓  State restrictions apply on every machine"],
+                ["Templates",        "✓  Shared template library for the whole team"],
+                ["Rate config",      "✗  Still per-session (intentional)"],
+                ["Drive token",      "✗  OAuth token stays local (security)"],
+                ["CO draft",         "✗  In-progress CO stays on your device"],
+              ].map(([lbl,note]) => (
+                <div key={lbl} style={{fontSize:10,color:C.stoneDk,lineHeight:1.5}}>
+                  <span style={{color:note.startsWith("✓")?C.moss:C.stoneMd}}>{note.charAt(0)}</span>
+                  <span style={{marginLeft:6,color:C.bark,fontWeight:note.startsWith("✓")?400:300}}>
+                    {lbl}
+                  </span>
+                  <span style={{marginLeft:4,color:C.stoneDk}}>— {note.slice(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{
+            padding:"14px 18px", background:"#F5EEE8",
+            border:`1px solid ${C.clay}33`,
+            fontSize:10, color:C.stoneDk, lineHeight:1.6,
+          }}>
+            <strong style={{color:C.clay}}>Note:</strong> The anon key is safe to expose in a
+            frontend app — Supabase Row Level Security handles access control.
+            For an internal tool on a private Vercel URL this is the standard approach.
+            If you ever make the URL public, you'd want to add proper auth.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -612,3 +928,206 @@ const jobInput = {
   fontSize:12, fontFamily:"'Jost',sans-serif",
   fontWeight:300,
 };
+
+// ── StateRow: edit one state inline ─────────────────────────
+function StateRow({ code, info, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [localLabel,    setLocalLabel]    = useState(info.label||"");
+  const [localTax,      setLocalTax]      = useState(((info.rate||0)*100).toFixed(2));
+  const [localInstall,  setLocalInstall]  = useState(((info.install||0)*100).toFixed(0));
+  const [localIncentive,setLocalIncentive]= useState(((info.incentiveRate||0)*100).toFixed(0));
+  const [localShowInc,  setLocalShowInc]  = useState(!!info.showIncentive);
+
+  const commit = () => {
+    onUpdate("label",         localLabel);
+    onUpdate("rate",          parseFloat(localTax)/100 || 0);
+    onUpdate("install",       parseFloat(localInstall)/100 || 0);
+    onUpdate("incentiveRate", parseFloat(localIncentive)/100 || 0);
+    onUpdate("showIncentive", localShowInc);
+    setEditing(false);
+  };
+
+  const rowSt = {
+    display:"grid", gridTemplateColumns:"0.7fr 2fr 1fr 1fr 1fr 0.8fr 80px",
+    gap:12, padding:"10px 0", borderBottom:"1px solid #EDE6D8", alignItems:"center",
+  };
+  const inp = {
+    width:"100%", background:"#F5F0E8", border:"1px solid #D8CFBC",
+    padding:"5px 7px", color:"#1C1810", fontSize:11,
+    fontFamily:"'Jost',sans-serif", fontWeight:300,
+  };
+
+  if (!editing) return (
+    <div style={rowSt}>
+      <div style={{fontSize:11,fontWeight:500,color:C.bark,letterSpacing:"0.08em"}}>{code}</div>
+      <div style={{fontSize:11,color:C.bark}}>{info.label}</div>
+      <div style={{textAlign:"right",fontSize:11,color:C.stoneDk}}>
+        {((info.rate||0)*100).toFixed(2)}%
+      </div>
+      <div style={{textAlign:"right",fontSize:11,color:C.stoneDk}}>
+        {((info.install||0)*100).toFixed(0)}%
+      </div>
+      <div style={{textAlign:"right",fontSize:11,color:C.stoneDk}}>
+        {((info.incentiveRate||0)*100).toFixed(0)}%
+      </div>
+      <div style={{textAlign:"center",fontSize:11,color:info.showIncentive?C.moss:C.stoneDk}}>
+        {info.showIncentive?"Yes":"No"}
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={()=>setEditing(true)} style={{
+          background:"transparent",border:"1px solid #D8CFBC",color:C.bark,
+          padding:"4px 10px",cursor:"pointer",fontSize:8,letterSpacing:"0.1em",
+          textTransform:"uppercase",fontFamily:"'Jost',sans-serif",
+        }}>Edit</button>
+        <button onClick={onDelete} style={{
+          background:"none",border:"none",color:C.stoneDk,
+          fontSize:14,cursor:"pointer",lineHeight:1,padding:"0 2px",
+        }}>×</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{...rowSt,background:"#FAF7F0",padding:"12px 8px",marginBottom:4}}>
+      <div style={{fontSize:12,fontWeight:500,color:C.bark,letterSpacing:"0.08em"}}>{code}</div>
+      <input value={localLabel} onChange={e=>setLocalLabel(e.target.value)} style={inp}
+        placeholder="State label"/>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+        <input type="number" value={localTax} onChange={e=>setLocalTax(e.target.value)}
+          style={{...inp,width:60,textAlign:"right"}} placeholder="0"/>
+        <span style={{fontSize:10,color:C.stoneDk}}>%</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+        <input type="number" value={localInstall} onChange={e=>setLocalInstall(e.target.value)}
+          style={{...inp,width:60,textAlign:"right"}} placeholder="0"/>
+        <span style={{fontSize:10,color:C.stoneDk}}>%</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+        <input type="number" value={localIncentive} onChange={e=>setLocalIncentive(e.target.value)}
+          style={{...inp,width:60,textAlign:"right"}} placeholder="0"/>
+        <span style={{fontSize:10,color:C.stoneDk}}>%</span>
+      </div>
+      <div style={{textAlign:"center"}}>
+        <button onClick={()=>setLocalShowInc(v=>!v)} style={{
+          padding:"4px 10px",fontSize:9,cursor:"pointer",fontFamily:"'Jost',sans-serif",
+          border:"1px solid #D8CFBC",
+          background:localShowInc?"#D8E0D0":"transparent",
+          color:localShowInc?C.moss:C.stoneDk,
+        }}>{localShowInc?"Yes":"No"}</button>
+      </div>
+      <button onClick={commit} style={{
+        background:C.charcoal,color:"#F5F0E8",border:"none",
+        padding:"6px 12px",cursor:"pointer",fontSize:8,
+        letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'Jost',sans-serif",
+      }}>Save</button>
+    </div>
+  );
+}
+
+// ── AddStateRow: add a brand-new state ───────────────────────
+function AddStateRow({ existingCodes, onAdd }) {
+  const [open,     setOpen]     = useState(false);
+  const [code,     setCode]     = useState("");
+  const [label,    setLabel]    = useState("");
+  const [tax,      setTax]      = useState("0");
+  const [install,  setInstall]  = useState("15");
+  const [incentive,setIncentive]= useState("0");
+  const [showInc,  setShowInc]  = useState(false);
+  const [err,      setErr]      = useState("");
+
+  const add = () => {
+    const c = code.trim().toUpperCase();
+    if (!c||c.length<2) { setErr("Enter a 2-letter state code"); return; }
+    if (existingCodes.includes(c)) { setErr(`${c} already exists`); return; }
+    onAdd(c, {
+      rate:          parseFloat(tax)/100||0,
+      label:         label||`${c} (${tax}% rate)`,
+      install:       parseFloat(install)/100||0.15,
+      incentiveRate: parseFloat(incentive)/100||0,
+      showIncentive: showInc,
+    });
+    setCode(""); setLabel(""); setTax("0"); setInstall("15"); setIncentive("0");
+    setShowInc(false); setErr(""); setOpen(false);
+  };
+
+  if (!open) return (
+    <div style={{paddingTop:16}}>
+      <button onClick={()=>setOpen(true)} style={{
+        background:"transparent",border:"1px solid #D8CFBC",color:C.bark,
+        padding:"8px 20px",cursor:"pointer",fontSize:8,letterSpacing:"0.2em",
+        textTransform:"uppercase",fontFamily:"'Jost',sans-serif",fontWeight:500,
+      }}>+ Add State</button>
+    </div>
+  );
+
+  const inp2 = {
+    width:"100%",background:"#F5F0E8",border:"1px solid #D8CFBC",
+    padding:"7px 8px",color:"#1C1810",fontSize:11,
+    fontFamily:"'Jost',sans-serif",fontWeight:300,
+  };
+
+  return (
+    <div style={{
+      marginTop:12,padding:"20px 20px",
+      background:"#FAF7F0",border:"1px dashed #C8BBA8",
+    }}>
+      <div style={{fontSize:8,letterSpacing:"0.22em",color:C.stoneDk,
+        textTransform:"uppercase",marginBottom:14}}>New State</div>
+      {err&&<div style={{fontSize:10,color:C.rust,marginBottom:8}}>{err}</div>}
+      <div style={{display:"grid",gridTemplateColumns:"0.7fr 2fr 1fr 1fr 1fr 0.8fr",gap:12,marginBottom:12}}>
+        <div>
+          <div style={{fontSize:8,letterSpacing:"0.12em",color:C.stoneDk,
+            textTransform:"uppercase",marginBottom:4}}>Code *</div>
+          <input value={code} onChange={e=>{setCode(e.target.value.toUpperCase());setErr("");}}
+            maxLength={3} placeholder="NV" style={inp2}/>
+        </div>
+        <div>
+          <div style={{fontSize:8,letterSpacing:"0.12em",color:C.stoneDk,
+            textTransform:"uppercase",marginBottom:4}}>Label</div>
+          <input value={label} onChange={e=>setLabel(e.target.value)}
+            placeholder="Nevada (6.85% rate)" style={inp2}/>
+        </div>
+        <div>
+          <div style={{fontSize:8,letterSpacing:"0.12em",color:C.stoneDk,
+            textTransform:"uppercase",marginBottom:4}}>Sales Tax %</div>
+          <input type="number" value={tax} onChange={e=>setTax(e.target.value)}
+            placeholder="0" style={{...inp2,textAlign:"right"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:8,letterSpacing:"0.12em",color:C.stoneDk,
+            textTransform:"uppercase",marginBottom:4}}>Install %</div>
+          <input type="number" value={install} onChange={e=>setInstall(e.target.value)}
+            placeholder="15" style={{...inp2,textAlign:"right"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:8,letterSpacing:"0.12em",color:C.stoneDk,
+            textTransform:"uppercase",marginBottom:4}}>Incentive %</div>
+          <input type="number" value={incentive} onChange={e=>setIncentive(e.target.value)}
+            placeholder="0" style={{...inp2,textAlign:"right"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:8,letterSpacing:"0.12em",color:C.stoneDk,
+            textTransform:"uppercase",marginBottom:4}}>Show Inc.</div>
+          <button onClick={()=>setShowInc(v=>!v)} style={{
+            padding:"7px 10px",fontSize:9,cursor:"pointer",width:"100%",
+            fontFamily:"'Jost',sans-serif",border:"1px solid #D8CFBC",
+            background:showInc?"#D8E0D0":"transparent",
+            color:showInc?C.moss:C.stoneDk,
+          }}>{showInc?"Yes":"No"}</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={add} style={{
+          background:C.charcoal,color:"#F5F0E8",border:"none",
+          padding:"8px 24px",cursor:"pointer",fontSize:8,
+          letterSpacing:"0.2em",textTransform:"uppercase",fontFamily:"'Jost',sans-serif",
+        }}>Add State</button>
+        <button onClick={()=>{setOpen(false);setErr("");}} style={{
+          background:"transparent",border:"1px solid #D8CFBC",color:C.stoneDk,
+          padding:"8px 16px",cursor:"pointer",fontSize:8,
+          letterSpacing:"0.12em",textTransform:"uppercase",fontFamily:"'Jost',sans-serif",
+        }}>Cancel</button>
+      </div>
+    </div>
+  );
+}
